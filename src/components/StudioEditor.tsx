@@ -144,7 +144,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button === 1 || (e.target === containerRef.current && e.shiftKey)) {
       setIsPanning(true);
-      setStartPan({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+      setStartPan({ x: e.clientX - pan.x, y: e.clientY - startPan.y });
       return;
     }
 
@@ -500,26 +500,27 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
                     top: `${layer.y}px`,
                     width: `${layer.width}px`,
                     minHeight: `${layer.height}px`,
-                    transform: `rotate(${layer.rotation}deg)`,
-                    opacity: layer.opacity,
                   }}
                 >
-                  {/* Subtle rendering of current text value */}
+                  {/* Matching backdrop to seamlessly replace original baked-in pixels */}
                   <div
-                    className="relative whitespace-pre-wrap leading-tight p-0.5 pointer-events-none"
+                    className="absolute inset-0 bg-[#15181c]/95 rounded-[2px] pointer-events-none"
+                    style={{ margin: '-1px -2px' }}
+                  />
+
+                  {/* Live updating text element synced with the right sidebar */}
+                  <div
+                    className="relative z-10 whitespace-pre-wrap leading-tight select-none pointer-events-none"
                     style={{
                       fontFamily: `"${layer.fontFamily}", Arial, sans-serif`,
                       fontSize: `${layer.fontSize}px`,
                       fontWeight: layer.fontWeight,
                       fontStyle: layer.fontStyle,
-                      color: layer.color,
+                      color: layer.color || '#ffffff',
                       textAlign: layer.textAlign,
                       letterSpacing: `${layer.letterSpacing}px`,
-                      lineHeight: layer.lineHeight,
+                      lineHeight: layer.lineHeight || 1.25,
                       textTransform: layer.textTransform,
-                      textShadow: layer.shadow.enabled
-                        ? `${layer.shadow.offsetX}px ${layer.shadow.offsetY}px ${layer.shadow.blur}px ${layer.shadow.color}`
-                        : 'none',
                     }}
                   >
                     {layer.text}
@@ -536,7 +537,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
                           e.stopPropagation();
                           setIsResizingLayer(true);
                         }}
-                        className="absolute -right-4 top-1/2 -translate-y-1/2 flex items-center justify-center text-pink-500 font-extrabold text-xs cursor-ew-resize hover:scale-125 transition-transform"
+                        className="absolute -right-4 top-1/2 -translate-y-1/2 flex items-center justify-center text-pink-500 font-extrabold text-xs cursor-ew-resize hover:scale-125 transition-transform select-none"
                       >
                         ↔
                       </div>
