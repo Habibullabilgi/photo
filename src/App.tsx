@@ -154,7 +154,7 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
-  // Scan text present in the image (with automatic fallback box)
+  // Scan text present in the image (Safe & Non-Destructive)
   const triggerOcrScan = async (imgDataUrl?: string, customW?: number, customH?: number) => {
     const targetUrl = imgDataUrl || currentImageUrl;
     const w = customW || imageWidth;
@@ -189,13 +189,11 @@ export default function App() {
         const data = await res.json();
         detected = data.detectedTexts || [];
       } catch (err) {
-        console.warn('OCR API endpoint not available, falling back to manual text layer creation.');
+        console.warn('OCR API endpoint not available.');
       }
 
-      let activeLayers: TextLayer[] = [];
-
       if (detected.length > 0) {
-        activeLayers = detected.map((item, index) => {
+        const newLayers: TextLayer[] = detected.map((item, index) => {
           const [ymin, xmin, ymax, xmax] = item.box_2d || [200, 200, 300, 800];
           const lx = Math.round((xmin / 1000) * w);
           const ly = Math.round((ymin / 1000) * h);
@@ -241,68 +239,36 @@ export default function App() {
             visible: true,
           };
         });
+
+        // Seamlessly inpaint behind detected text regions only
+        setIsInpainting(true);
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = reject;
+          img.src = targetUrl;
+        });
+
+        const restoredUrl = await inpaintImageRegions(
+          img,
+          newLayers.map((l) => ({
+            x: l.x,
+            y: l.y,
+            width: l.width,
+            height: l.height,
+            fallbackBgColor: l.originalBgColor,
+          }))
+        );
+
+        setCurrentImageUrl(restoredUrl);
+        setLayers(newLayers);
+        setSelectedLayerId(newLayers[0]?.id || null);
       } else {
-        // Fallback default editable text layer if no text detected automatically
-        activeLayers = [
-          {
-            id: `text-fallback-${Date.now()}`,
-            text: 'Vijayapura, Karnataka, India\nBasaveshwara Circle, Tikota, Vijayapura, Karnataka 586130, India',
-            x: Math.round(w * 0.08),
-            y: Math.round(h * 0.72),
-            width: Math.round(w * 0.84),
-            height: 110,
-            rotation: 0,
-            fontFamily: 'Inter',
-            fontSize: 15,
-            fontWeight: 600,
-            fontStyle: 'normal',
-            color: '#ffffff',
-            opacity: 1,
-            textAlign: 'left',
-            letterSpacing: 1,
-            lineHeight: 1.2,
-            textTransform: 'none',
-            textDecoration: 'none',
-            stroke: { enabled: false, color: '#000', width: 2 },
-            shadow: { enabled: true, color: 'rgba(0,0,0,0.8)', blur: 8, offsetX: 0, offsetY: 2 },
-            glow: { enabled: false, color: '#fff', blur: 0 },
-            gradient: { enabled: false, type: 'linear', angle: 0, startColor: '#fff', endColor: '#aaa' },
-            backgroundBadge: { enabled: true, color: '#000000', opacity: 0.55, paddingX: 12, paddingY: 8, borderRadius: 6 },
-            arc: { enabled: false, curvature: 0 },
-            blendMode: 'source-over',
-            isOriginalDetected: false,
-            originalText: '',
-            isInpainted: false,
-            locked: false,
-            visible: true,
-          }
-        ];
+        // Safe Fallback: Keep image 100% clean and pristine without distortion
+        setLayers([]);
+        setSelectedLayerId(null);
       }
-
-      // Seamlessly inpaint behind the text regions
-      setIsInpainting(true);
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = reject;
-        img.src = targetUrl;
-      });
-
-      const restoredUrl = await inpaintImageRegions(
-        img,
-        activeLayers.map((l) => ({
-          x: l.x,
-          y: l.y,
-          width: l.width,
-          height: l.height,
-          fallbackBgColor: l.originalBgColor,
-        }))
-      );
-
-      setCurrentImageUrl(restoredUrl);
-      setLayers(activeLayers);
-      setSelectedLayerId(activeLayers[0]?.id || null);
 
     } catch (e) {
       console.error('Scan text failed:', e);
