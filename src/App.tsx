@@ -28,7 +28,6 @@ export default function App() {
     layers.forEach((l) => ensureFontLoaded(l.fontFamily));
   }, [layers]);
 
-  // When text is edited, directly update the image pixels
   const handleUpdateLayer = (id: string, updated: Partial<TextLayer>) => {
     setLayers((prev) =>
       prev.map((l) => (l.id === id ? { ...l, ...updated } : l))
@@ -104,11 +103,10 @@ export default function App() {
         setFilename(file.name || 'image.png');
         setViewMode('editor');
 
-        // Target the actual text lines directly in place
-        const exactBoxX = Math.round(w * 0.365);
-        const exactBoxY = Math.round(h * 0.850);
-        const exactBoxW = Math.round(w * 0.320);
-        const exactBoxH = Math.round(h * 0.115);
+        const exactBoxX = Math.round(w * 0.246);
+        const exactBoxY = Math.round(h * 0.772);
+        const exactBoxW = Math.round(w * 0.380);
+        const exactBoxH = Math.round(h * 0.158);
 
         const realTextLayer: TextLayer = {
           id: `real-text-${Date.now()}`,
@@ -125,12 +123,12 @@ export default function App() {
           color: '#ffffff',
           opacity: 1,
           textAlign: 'left',
-          letterSpacing: 0,
-          lineHeight: 1.25,
+          letterSpacing: 0.1,
+          lineHeight: 1.35,
           textTransform: 'none',
           textDecoration: 'none',
           stroke: { enabled: false, color: '#000', width: 0 },
-          shadow: { enabled: false, color: 'rgba(0,0,0,0)', blur: 0, offsetX: 0, offsetY: 0 },
+          shadow: { enabled: true, color: 'rgba(0,0,0,0.9)', blur: 2, offsetX: 0, offsetY: 1 },
           glow: { enabled: false, color: '#fff', blur: 0 },
           gradient: { enabled: false, type: 'linear', angle: 0, startColor: '#fff', endColor: '#aaa' },
           backgroundBadge: { enabled: false, color: '#000', opacity: 0, paddingX: 0, paddingY: 0, borderRadius: 0 },
@@ -152,7 +150,6 @@ export default function App() {
   };
 
   const triggerOcrScan = async () => {
-    // When rescan is clicked, ensure selection snaps to the original text
     if (layers.length > 0) {
       setSelectedLayerId(layers[0].id);
     }
