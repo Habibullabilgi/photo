@@ -1,0 +1,6 @@
+{
+  "name": "PhoText Studio - AI Image Text Editor",
+  "description": "AI-powered image text detection, seamless replacement and removal, advanced typography controls, and vector SVG/PDF exporting.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
