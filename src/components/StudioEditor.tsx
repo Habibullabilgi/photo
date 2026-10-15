@@ -18,6 +18,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Loader2,
 } from 'lucide-react';
 import { TextLayer } from '../types';
 import { ensureFontLoaded } from '../utils/fonts';
@@ -65,7 +66,6 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
   isInpainting,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const imageContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Zoom & Pan
@@ -74,37 +74,17 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
   const [isPanning, setIsPanning] = useState(false);
   const [startPan, setStartPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Dragging & Resizing Box on Canvas
-  const [isDraggingLayer, setIsDraggingLayer] = useState(false);
-  const [isResizingLayer, setIsResizingLayer] = useState(false);
-  const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-
-  // Manual Drawing of Selection Area
-  const [isDrawingSelection, setIsDrawingSelection] = useState(false);
-  const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
-
   // Compare mode
   const [compareMode, setCompareMode] = useState<boolean>(false);
   const [splitPos, setSplitPos] = useState<number>(50);
   const [isDraggingSplit, setIsDraggingSplit] = useState(false);
 
-  // Tools & tabs
+  // Hovered layer for green outline
+  const [hoveredLayerId, setHoveredLayerId] = useState<string | null>(null);
+
+  // Tool & fonts
   const [activeTool, setActiveTool] = useState<string>('text');
   const [fontCategory, setFontCategory] = useState<string>('Local Fonts');
-
-  // Accordions
-  const [openSections, setOpenSections] = useState<{
-    position: boolean;
-    original: boolean;
-    shadow: boolean;
-    effect: boolean;
-  }>({
-    position: false,
-    original: false,
-    shadow: false,
-    effect: false,
-  });
-
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isIdentifying, setIsIdentifying] = useState(false);
 
@@ -128,40 +108,10 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
     setZoom((prev) => Math.min(2.5, Math.max(0.2, Number((prev + delta).toFixed(2)))));
   };
 
-  const toggleSection = (section: keyof typeof openSections) => {
-    setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
-  };
-
-  const getImageCoordinates = (e: React.MouseEvent) => {
-    if (!imageContainerRef.current) return { x: 0, y: 0 };
-    const rect = imageContainerRef.current.getBoundingClientRect();
-    return {
-      x: Math.round((e.clientX - rect.left) / zoom),
-      y: Math.round((e.clientY - rect.top) / zoom),
-    };
-  };
-
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button === 1 || (e.target === containerRef.current && e.shiftKey)) {
+    if (e.target === containerRef.current || e.button === 1) {
       setIsPanning(true);
-      setStartPan({ x: e.clientX - pan.x, y: e.clientY - startPan.y });
-      return;
-    }
-
-    // Click on canvas background to start drawing a selection box
-    if (imageContainerRef.current && (e.target === imageContainerRef.current || (e.target as HTMLElement).tagName === 'IMG')) {
-      const coords = getImageCoordinates(e);
-      setIsDrawingSelection(true);
-      setDrawStart(coords);
-
-      if (selectedLayer) {
-        onUpdateLayer(selectedLayer.id, {
-          x: coords.x,
-          y: coords.y,
-          width: 10,
-          height: 10,
-        });
-      }
+      setStartPan({ x: e.clientX - pan.x, y: e.clientY - pan.y });
     }
   };
 
@@ -169,54 +119,17 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
     if (isPanning) {
       setPan({ x: e.clientX - startPan.x, y: e.clientY - startPan.y });
     }
-
     if (isDraggingSplit && containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       const relativeX = e.clientX - rect.left;
       const percent = Math.max(5, Math.min(95, (relativeX / rect.width) * 100));
       setSplitPos(percent);
     }
-
-    // Drawing new selection box by dragging
-    if (isDrawingSelection && drawStart && selectedLayer) {
-      const coords = getImageCoordinates(e);
-      const newX = Math.min(drawStart.x, coords.x);
-      const newY = Math.min(drawStart.y, coords.y);
-      const newW = Math.max(20, Math.abs(coords.x - drawStart.x));
-      const newH = Math.max(20, Math.abs(coords.y - drawStart.y));
-
-      onUpdateLayer(selectedLayer.id, {
-        x: newX,
-        y: newY,
-        width: newW,
-        height: newH,
-      });
-    }
-
-    // Moving existing box
-    if (isDraggingLayer && selectedLayer) {
-      const coords = getImageCoordinates(e);
-      onUpdateLayer(selectedLayer.id, {
-        x: coords.x - dragOffset.x,
-        y: coords.y - dragOffset.y,
-      });
-    }
-
-    // Resizing existing box from arrow handle
-    if (isResizingLayer && selectedLayer) {
-      const coords = getImageCoordinates(e);
-      const newW = Math.max(30, coords.x - selectedLayer.x);
-      onUpdateLayer(selectedLayer.id, { width: newW });
-    }
   };
 
   const handleMouseUp = () => {
     setIsPanning(false);
     setIsDraggingSplit(false);
-    setIsDrawingSelection(false);
-    setIsDraggingLayer(false);
-    setIsResizingLayer(false);
-    setDrawStart(null);
   };
 
   const handleEyeDropper = async () => {
@@ -265,7 +178,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
           </button>
 
           <div className="flex items-center gap-1 text-lg font-black tracking-tight text-zinc-900">
-            <span>photext</span>
+            <span>PhoText</span>
             <span className="text-pink-600">.ai</span>
           </div>
         </div>
@@ -326,7 +239,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
             }`}
           >
             <Sparkles className={`w-3.5 h-3.5 text-pink-500 ${isScanning ? 'animate-spin' : ''}`} />
-            <span>{isScanning ? 'Detecting...' : 'Scan Text in Image'}</span>
+            <span>{isScanning ? 'Scanning...' : 'Scan Text in Image'}</span>
           </button>
 
           <button
@@ -407,37 +320,29 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
-          className="flex-1 h-full bg-[#f1f3f6] relative overflow-hidden flex items-center justify-center cursor-crosshair"
+          className="flex-1 h-full bg-[#f1f3f6] relative overflow-hidden flex items-center justify-center"
           style={{
             backgroundImage: `radial-gradient(circle at 1px 1px, #d4d7dc 1px, transparent 0)`,
             backgroundSize: '16px 16px',
           }}
         >
-          {/* Rulers */}
-          <div className="absolute top-0 left-0 right-0 h-4 bg-white border-b border-zinc-200 z-10 flex items-center pointer-events-none opacity-60">
-            <div className="w-full flex justify-between px-2 font-mono text-[8px] text-zinc-400">
-              <span>0</span>
-              <span>200</span>
-              <span>400</span>
-              <span>600</span>
-              <span>800</span>
-              <span>1000</span>
-              <span>1200</span>
+          {/* Laser Scan Animation Overlay from Video */}
+          {isScanning && (
+            <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/40 backdrop-blur-xs pointer-events-none">
+              <div className="flex flex-col items-center gap-3 bg-white/95 px-6 py-4 rounded-2xl shadow-2xl">
+                <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+                <span className="text-sm font-bold text-zinc-800">Scanning Image Text...</span>
+              </div>
+              {/* Laser line effect */}
+              <div
+                className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_15px_#10b981] animate-bounce"
+                style={{ top: '40%' }}
+              />
             </div>
-          </div>
-          <div className="absolute top-0 bottom-0 left-0 w-4 bg-white border-r border-zinc-200 z-10 flex flex-col justify-between py-6 pointer-events-none opacity-60">
-            <div className="h-full flex flex-col justify-between items-center font-mono text-[8px] text-zinc-400">
-              <span>0</span>
-              <span>200</span>
-              <span>400</span>
-              <span>600</span>
-              <span>800</span>
-            </div>
-          </div>
+          )}
 
-          {/* Interactive Image & Selection Container */}
+          {/* Canvas container */}
           <div
-            ref={imageContainerRef}
             className="relative transition-transform duration-75 origin-center shadow-xl rounded-sm bg-white"
             style={{
               width: `${width}px`,
@@ -447,12 +352,12 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
           >
             <img
               src={imageUrl}
-              alt="Uploaded Preview"
+              alt="Artwork"
               className="absolute inset-0 w-full h-full object-contain pointer-events-none select-none"
               draggable={false}
             />
 
-            {/* Split comparison view */}
+            {/* Split Comparison View */}
             {compareMode && (
               <div
                 className="absolute inset-0 overflow-hidden pointer-events-none z-20"
@@ -467,85 +372,73 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
               </div>
             )}
 
-            {/* Pink Selection Box & Interactive Overlay */}
-            {layers.map((layer) => {
-              if (!layer.visible || layer.isRemoved) return null;
-              const isSelected = selectedLayerId === layer.id;
+            {/* Discrete Text Lines as in photext.ai video */}
+            {!isScanning &&
+              layers.map((layer) => {
+                if (!layer.visible || layer.isRemoved) return null;
+                const isSelected = selectedLayerId === layer.id;
+                const isHovered = hoveredLayerId === layer.id;
 
-              return (
-                <div
-                  key={layer.id}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectLayer(layer.id);
-                  }}
-                  onMouseDown={(e) => {
-                    if (isSelected) {
+                return (
+                  <div
+                    key={layer.id}
+                    onMouseEnter={() => setHoveredLayerId(layer.id)}
+                    onMouseLeave={() => setHoveredLayerId(null)}
+                    onClick={(e) => {
                       e.stopPropagation();
-                      setIsDraggingLayer(true);
-                      const coords = getImageCoordinates(e);
-                      setDragOffset({
-                        x: coords.x - layer.x,
-                        y: coords.y - layer.y,
-                      });
-                    }
-                  }}
-                  className={`absolute transition-all cursor-move ${
-                    isSelected
-                      ? 'border-2 border-dashed border-pink-500 z-30'
-                      : 'hover:border-2 hover:border-dashed hover:border-pink-300 z-10'
-                  }`}
-                  style={{
-                    left: `${layer.x}px`,
-                    top: `${layer.y}px`,
-                    width: `${layer.width}px`,
-                    minHeight: `${layer.height}px`,
-                  }}
-                >
-                  {/* Matching backdrop to seamlessly replace original baked-in pixels */}
-                  <div
-                    className="absolute inset-0 bg-[#15181c]/95 rounded-[2px] pointer-events-none"
-                    style={{ margin: '-1px -2px' }}
-                  />
-
-                  {/* Live updating text element synced with the right sidebar */}
-                  <div
-                    className="relative z-10 whitespace-pre-wrap leading-tight select-none pointer-events-none"
+                      onSelectLayer(layer.id);
+                    }}
+                    className={`absolute transition-all cursor-pointer ${
+                      isSelected
+                        ? 'border-2 border-dashed border-pink-500 z-30'
+                        : isHovered
+                        ? 'border-2 border-dashed border-emerald-400 bg-emerald-500/10 z-20'
+                        : 'border border-transparent z-10'
+                    }`}
                     style={{
-                      fontFamily: `"${layer.fontFamily}", Arial, sans-serif`,
-                      fontSize: `${layer.fontSize}px`,
-                      fontWeight: layer.fontWeight,
-                      fontStyle: layer.fontStyle,
-                      color: layer.color || '#ffffff',
-                      textAlign: layer.textAlign,
-                      letterSpacing: `${layer.letterSpacing}px`,
-                      lineHeight: layer.lineHeight || 1.25,
-                      textTransform: layer.textTransform,
+                      left: `${layer.x}px`,
+                      top: `${layer.y}px`,
+                      width: `${layer.width}px`,
+                      height: `${layer.height}px`,
                     }}
                   >
-                    {layer.text}
-                  </div>
+                    {/* Dark pill masking original line */}
+                    <div
+                      className="absolute inset-0 bg-[#16191d] rounded-xs pointer-events-none"
+                      style={{ margin: '-1px -2px' }}
+                    />
 
-                  {/* Corner Handles and Resize Controls */}
-                  {isSelected && (
-                    <>
-                      <div className="absolute -top-2 -left-2 w-4 h-4 rounded-full bg-pink-500 shadow border-2 border-white pointer-events-none" />
-                      <div className="absolute -bottom-2 -right-2 w-4 h-4 rounded-full bg-pink-500 shadow border-2 border-white pointer-events-none" />
+                    {/* Updated text rendered directly on image */}
+                    <div
+                      className="relative z-10 whitespace-nowrap overflow-hidden text-ellipsis leading-none select-none flex items-center h-full px-0.5"
+                      style={{
+                        fontFamily: `"${layer.fontFamily}", Arial, sans-serif`,
+                        fontSize: `${layer.fontSize}px`,
+                        fontWeight: layer.fontWeight,
+                        color: layer.color || '#ffffff',
+                      }}
+                    >
+                      {layer.text}
+                    </div>
 
+                    {/* Floating Popover on Selected Line (Video Feature) */}
+                    {isSelected && (
                       <div
-                        onMouseDown={(e) => {
-                          e.stopPropagation();
-                          setIsResizingLayer(true);
-                        }}
-                        className="absolute -right-4 top-1/2 -translate-y-1/2 flex items-center justify-center text-pink-500 font-extrabold text-xs cursor-ew-resize hover:scale-125 transition-transform select-none"
+                        className="absolute -top-16 left-0 bg-white border border-zinc-200 rounded-lg shadow-xl p-2 z-40 flex items-center gap-2 animate-in fade-in"
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        ↔
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase">Edit:</span>
+                        <input
+                          type="text"
+                          value={layer.text}
+                          onChange={(e) => onUpdateLayer(layer.id, { text: e.target.value })}
+                          className="px-2 py-1 text-xs border border-zinc-300 rounded font-medium text-zinc-800 focus:outline-pink-500 w-64"
+                        />
                       </div>
-                    </>
-                  )}
-                </div>
-              );
-            })}
+                    )}
+                  </div>
+                );
+              })}
           </div>
 
           {/* Bottom Left Compare */}
@@ -583,11 +476,10 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
           </div>
         </div>
 
-        {/* 3. RIGHT INSPECTOR COLUMN: Edit the Selected Text directly here */}
+        {/* 3. RIGHT INSPECTOR COLUMN: Edit the Selected Line */}
         <aside className="w-80 xl:w-96 bg-white border-l border-zinc-200 flex flex-col text-xs text-zinc-800 select-none overflow-hidden shrink-0 shadow-sm z-20">
           {selectedLayer ? (
             <>
-              {/* Unselect / Reset */}
               <div className="p-3 border-b border-zinc-200 flex items-center justify-between">
                 <button
                   onClick={() => onSelectLayer(null)}
@@ -603,16 +495,18 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
                 </button>
               </div>
 
-              {/* Editable Text Area synced with the box on the image */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 <div>
+                  <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
+                    Selected Text Line
+                  </label>
                   <textarea
                     autoFocus
                     value={selectedLayer.text}
                     onChange={(e) => onUpdateLayer(selectedLayer.id, { text: e.target.value })}
-                    rows={6}
-                    className="w-full px-3 py-2.5 rounded-xl border border-zinc-300 bg-white text-zinc-900 font-medium text-xs leading-relaxed focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500 resize-none shadow-xs"
-                    placeholder="Type or edit text selected in image..."
+                    rows={3}
+                    className="w-full px-3 py-2.5 rounded-xl border border-zinc-300 bg-white text-zinc-900 font-medium text-xs leading-relaxed focus:outline-none focus:border-pink-500 resize-none shadow-xs"
+                    placeholder="Type replacement text..."
                   />
                   <div className="flex justify-end mt-1">
                     <button
@@ -636,28 +530,6 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
                     >
                       <Wand2 className={`w-3 h-3 text-pink-500 ${isIdentifying ? 'animate-spin' : ''}`} />
                       <span>{isIdentifying ? 'Identifying...' : 'Identify font'}</span>
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between border-b border-zinc-200 pb-1.5 text-[11px] text-zinc-500">
-                    <button className="p-0.5 hover:text-zinc-900">
-                      <ChevronLeft className="w-3.5 h-3.5" />
-                    </button>
-                    {['Preset', 'Local Fonts', 'Sans Serif', 'Serif', 'Display'].map((cat) => (
-                      <button
-                        key={cat}
-                        onClick={() => setFontCategory(cat)}
-                        className={`px-1.5 py-0.5 rounded ${
-                          fontCategory === cat
-                            ? 'text-zinc-900 font-bold border-b-2 border-zinc-900'
-                            : 'hover:text-zinc-900'
-                        }`}
-                      >
-                        {cat}
-                      </button>
-                    ))}
-                    <button className="p-0.5 hover:text-zinc-900">
-                      <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
 
@@ -695,7 +567,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
                       <input
                         type="range"
                         min={6}
-                        max={72}
+                        max={48}
                         value={selectedLayer.fontSize}
                         onChange={(e) =>
                           onUpdateLayer(selectedLayer.id, { fontSize: Number(e.target.value) })
@@ -733,93 +605,15 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
                       </span>
                     </div>
                   </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-zinc-600 font-medium">Letter Spacing</span>
-                    <input
-                      type="range"
-                      min={-2}
-                      max={15}
-                      value={selectedLayer.letterSpacing}
-                      onChange={(e) =>
-                        onUpdateLayer(selectedLayer.id, {
-                          letterSpacing: Number(e.target.value),
-                        })
-                      }
-                      className="w-32 accent-pink-600"
-                    />
-                  </div>
-                </div>
-
-                {/* Collapsible Accordions */}
-                <div className="pt-2 border-t border-zinc-100 space-y-1">
-                  <div className="border border-zinc-200 rounded-xl overflow-hidden">
-                    <button
-                      onClick={() => toggleSection('position')}
-                      className="w-full flex items-center justify-between px-3 py-2 bg-zinc-50/50 hover:bg-zinc-50 text-left font-semibold text-zinc-700 text-xs"
-                    >
-                      <span>Position</span>
-                      <ChevronDown
-                        className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${
-                          openSections.position ? 'rotate-180' : ''
-                        }`}
-                      />
-                    </button>
-                    {openSections.position && (
-                      <div className="p-3 bg-white grid grid-cols-2 gap-2 text-[11px]">
-                        <div>
-                          <span className="text-zinc-400">X:</span>
-                          <input
-                            type="number"
-                            value={selectedLayer.x}
-                            onChange={(e) =>
-                              onUpdateLayer(selectedLayer.id, { x: Number(e.target.value) })
-                            }
-                            className="w-full border border-zinc-200 rounded px-1.5 py-0.5 font-mono text-zinc-800"
-                          />
-                        </div>
-                        <div>
-                          <span className="text-zinc-400">Y:</span>
-                          <input
-                            type="number"
-                            value={selectedLayer.y}
-                            onChange={(e) =>
-                              onUpdateLayer(selectedLayer.id, { y: Number(e.target.value) })
-                            }
-                            className="w-full border border-zinc-200 rounded px-1.5 py-0.5 font-mono text-zinc-800"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="border border-zinc-200 rounded-xl overflow-hidden">
-                    <button
-                      onClick={() => toggleSection('original')}
-                      className="w-full flex items-center justify-between px-3 py-2 bg-zinc-50/50 hover:bg-zinc-50 text-left font-semibold text-zinc-700 text-xs"
-                    >
-                      <span>Original Text</span>
-                      <ChevronDown
-                        className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${
-                          openSections.original ? 'rotate-180' : ''
-                        }`}
-                      />
-                    </button>
-                    {openSections.original && (
-                      <div className="p-3 bg-white text-[11px] text-zinc-600 font-mono whitespace-pre-wrap bg-zinc-50 rounded m-2">
-                        {selectedLayer.originalText || selectedLayer.text}
-                      </div>
-                    )}
-                  </div>
                 </div>
               </div>
             </>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-zinc-400">
               <Type className="w-8 h-8 mb-2 opacity-40 text-pink-500" />
-              <p className="text-xs font-semibold text-zinc-700">No Text Block Selected</p>
+              <p className="text-xs font-semibold text-zinc-700">No Text Selected</p>
               <p className="text-[11px] text-zinc-400 mt-1">
-                Drag on the photo to draw a box, or click the pink dashed box.
+                Hover or click on any text line in the photo to edit.
               </p>
             </div>
           )}
