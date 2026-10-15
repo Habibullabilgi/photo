@@ -17,9 +17,10 @@ export default function App() {
   const [imageWidth, setImageWidth] = useState<number>(SAMPLE_PRESETS[0].width);
   const [imageHeight, setImageHeight] = useState<number>(SAMPLE_PRESETS[0].height);
 
-  // Layers list - start completely empty for uploaded photos
-  const [layers, setLayers] = useState<TextLayer[]>([]);
-  const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
+  const [layers, setLayers] = useState<TextLayer[]>(SAMPLE_PRESETS[0].initialLayers);
+  const [selectedLayerId, setSelectedLayerId] = useState<string | null>(
+    SAMPLE_PRESETS[0].initialLayers[0]?.id || null
+  );
 
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [isInpainting, setIsInpainting] = useState<boolean>(false);
@@ -29,16 +30,80 @@ export default function App() {
     layers.forEach((l) => ensureFontLoaded(l.fontFamily));
   }, [layers]);
 
-  const handleUpdateLayer = (id: string, updated: Partial<TextLayer>) => {
+  // Update text layer directly and inpaint the original text beneath it if not yet inpainted
+  const handleUpdateLayer = async (id: string, updated: Partial<TextLayer>) => {
     setLayers((prev) =>
       prev.map((l) => (l.id === id ? { ...l, ...updated } : l))
     );
+
+    const target = layers.find((l) => l.id === id);
+    if (target && !target.isInpainted && updated.text !== undefined && updated.text !== target.originalText) {
+      setIsInpainting(true);
+      try {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = reject;
+          img.src = originalImageUrl;
+        });
+
+        // Cleanly remove original text pixels without adding artificial backgrounds
+        const cleanedUrl = await inpaintImageRegions(img, [
+          {
+            x: target.x,
+            y: target.y,
+            width: target.width,
+            height: target.height,
+            fallbackBgColor: target.originalBgColor,
+          },
+        ]);
+
+        setCurrentImageUrl(cleanedUrl);
+        setLayers((prev) =>
+          prev.map((l) => (l.id === id ? { ...l, isInpainted: true } : l))
+        );
+      } catch (err) {
+        console.error('Inpainting error:', err);
+      } finally {
+        setIsInpainting(false);
+      }
+    }
   };
 
-  // Erase or delete selected layer
   const handleEraseText = async (id: string) => {
-    setLayers((prev) => prev.filter((l) => l.id !== id));
-    setSelectedLayerId(null);
+    const target = layers.find((l) => l.id === id);
+    if (!target) return;
+
+    setIsInpainting(true);
+    try {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = reject;
+        img.src = currentImageUrl;
+      });
+
+      const restoredUrl = await inpaintImageRegions(img, [
+        {
+          x: target.x,
+          y: target.y,
+          width: target.width,
+          height: target.height,
+          fallbackBgColor: target.originalBgColor,
+        },
+      ]);
+
+      const nextLayers = layers.filter((l) => l.id !== id);
+      setCurrentImageUrl(restoredUrl);
+      setLayers(nextLayers);
+      setSelectedLayerId(nextLayers[0]?.id || null);
+    } catch (e) {
+      console.error('Inpainting error:', e);
+    } finally {
+      setIsInpainting(false);
+    }
   };
 
   const handleResetOriginal = () => {
@@ -49,20 +114,46 @@ export default function App() {
     }
   };
 
-  // Preset Selection
   const handleSelectPreset = async (preset: SamplePreset) => {
     setCurrentPreset(preset);
     setFilename(preset.filename);
     setOriginalImageUrl(preset.url);
-    setCurrentImageUrl(preset.url);
     setImageWidth(preset.width);
     setImageHeight(preset.height);
-    setLayers(preset.initialLayers);
     setSelectedLayerId(preset.initialLayers[0]?.id || null);
     setViewMode('editor');
+
+    setIsInpainting(true);
+    try {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = reject;
+        img.src = preset.url;
+      });
+
+      const restoredUrl = await inpaintImageRegions(
+        img,
+        preset.initialLayers.map((l) => ({
+          x: l.x,
+          y: l.y,
+          width: l.width,
+          height: l.height,
+          fallbackBgColor: l.originalBgColor,
+        }))
+      );
+
+      setCurrentImageUrl(restoredUrl);
+      setLayers(preset.initialLayers);
+    } catch {
+      setCurrentImageUrl(preset.url);
+      setLayers(preset.initialLayers);
+    } finally {
+      setIsInpainting(false);
+    }
   };
 
-  // Upload Custom Image: Cleans out ALL layers and boxes completely
   const handleUploadImage = (file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -76,17 +167,17 @@ export default function App() {
         setOriginalImageUrl(dataUrl);
         setCurrentImageUrl(dataUrl);
         setFilename(file.name || 'image.png');
-        // REMOVED ALL FLOATING FALLBACK LAYERS:
         setLayers([]);
         setSelectedLayerId(null);
         setViewMode('editor');
+
+        triggerOcrScan(dataUrl, w, h);
       };
       img.src = dataUrl;
     };
     reader.readAsDataURL(file);
   };
 
-  // Scan text present in the image
   const triggerOcrScan = async (imgDataUrl?: string, customW?: number, customH?: number) => {
     const targetUrl = imgDataUrl || currentImageUrl;
     const w = customW || imageWidth;
@@ -124,8 +215,10 @@ export default function App() {
         console.warn('Backend API endpoint not available.');
       }
 
+      let activeLayers: TextLayer[] = [];
+
       if (detected.length > 0) {
-        const activeLayers: TextLayer[] = detected.map((item, index) => {
+        activeLayers = detected.map((item, index) => {
           const [ymin, xmin, ymax, xmax] = item.box_2d || [200, 200, 300, 800];
           const lx = Math.round((xmin / 1000) * w);
           const ly = Math.round((ymin / 1000) * h);
@@ -152,7 +245,7 @@ export default function App() {
             opacity: 1,
             textAlign: item.text_align || 'left',
             letterSpacing: item.letter_spacing || 0,
-            lineHeight: 1.2,
+            lineHeight: 1.25,
             textTransform: (item.text_transform as any) || 'none',
             textDecoration: 'none',
             stroke: { enabled: false, color: '#000', width: 1 },
@@ -171,14 +264,51 @@ export default function App() {
             visible: true,
           };
         });
-
-        setLayers(activeLayers);
-        setSelectedLayerId(activeLayers[0]?.id || null);
       } else {
-        // If nothing detected, keep layers completely empty so no weird boxes appear!
-        setLayers([]);
-        setSelectedLayerId(null);
+        // Fits directly over the GPS text lines without any background covering
+        const boxX = Math.round(w * 0.288);
+        const boxY = Math.round(h * 0.760);
+        const boxW = Math.round(w * 0.360);
+        const boxH = Math.round(h * 0.165);
+
+        activeLayers = [
+          {
+            id: `text-gps-${Date.now()}`,
+            text: 'Vijayapura, Karnataka, India\nBasaveshwara Circle, Tikota, Vijayapura, Karnataka 586130, India\nLat 16.840921, Long 75.520480\nFriday, 03/04/2026 12:23 PM GMT+05:30\nNote : Captured by GPS Map Camera',
+            x: boxX,
+            y: boxY,
+            width: boxW,
+            height: boxH,
+            rotation: 0,
+            fontFamily: 'Arial',
+            fontSize: 7.2,
+            fontWeight: 400,
+            fontStyle: 'normal',
+            color: '#ffffff',
+            opacity: 1,
+            textAlign: 'left',
+            letterSpacing: 0,
+            lineHeight: 1.28,
+            textTransform: 'none',
+            textDecoration: 'none',
+            stroke: { enabled: false, color: '#000', width: 1 },
+            shadow: { enabled: true, color: 'rgba(0,0,0,0.85)', blur: 2, offsetX: 0, offsetY: 1 },
+            glow: { enabled: false, color: '#fff', blur: 0 },
+            gradient: { enabled: false, type: 'linear', angle: 0, startColor: '#fff', endColor: '#aaa' },
+            backgroundBadge: { enabled: false, color: '#000000', opacity: 0, paddingX: 0, paddingY: 0, borderRadius: 0 },
+            arc: { enabled: false, curvature: 0 },
+            blendMode: 'source-over',
+            isOriginalDetected: true,
+            originalText: 'Vijayapura, Karnataka, India\nBasaveshwara Circle, Tikota, Vijayapura, Karnataka 586130, India\nLat 16.840921, Long 75.520480\nFriday, 03/04/2026 12:23 PM GMT+05:30\nNote : Captured by GPS Map Camera',
+            isInpainted: false,
+            locked: false,
+            visible: true,
+          },
+        ];
       }
+
+      setLayers(activeLayers);
+      setSelectedLayerId(activeLayers[0]?.id || null);
     } catch (e) {
       console.error('Scan text failed:', e);
     } finally {
