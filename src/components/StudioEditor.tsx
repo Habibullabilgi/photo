@@ -68,21 +68,16 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Zoom & Pan
   const [zoom, setZoom] = useState<number>(0.65);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [startPan, setStartPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Compare mode
   const [compareMode, setCompareMode] = useState<boolean>(false);
   const [splitPos, setSplitPos] = useState<number>(50);
   const [isDraggingSplit, setIsDraggingSplit] = useState(false);
 
-  // Hovered layer for green outline
   const [hoveredLayerId, setHoveredLayerId] = useState<string | null>(null);
-
-  // Tool & fonts
   const [activeTool, setActiveTool] = useState<string>('text');
   const [fontCategory, setFontCategory] = useState<string>('Local Fonts');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -140,7 +135,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
         const result = await eyeDropper.open();
         onUpdateLayer(selectedLayer.id, { color: result.sRGBHex });
       } catch {
-        // user cancelled
+        // cancelled
       }
     }
   };
@@ -166,7 +161,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
 
   return (
     <div className="h-screen w-screen flex flex-col bg-[#eef0f3] text-zinc-900 select-none overflow-hidden font-sans">
-      {/* 1. Header */}
+      {/* Header */}
       <header className="h-13 bg-white border-b border-zinc-200 px-4 flex items-center justify-between z-30 shrink-0">
         <div className="flex items-center gap-4">
           <button
@@ -264,7 +259,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
         </div>
       </header>
 
-      {/* 2. Main Studio Area */}
+      {/* Main Workspace */}
       <div className="flex-1 flex overflow-hidden relative">
         {/* Left Toolbar */}
         <aside className="w-16 bg-white border-r border-zinc-200 flex flex-col items-center py-3 select-none shrink-0 z-20">
@@ -326,22 +321,21 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
             backgroundSize: '16px 16px',
           }}
         >
-          {/* Laser Scan Animation Overlay from Video */}
+          {/* Green Laser Scan Overlay from Video */}
           {isScanning && (
             <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/40 backdrop-blur-xs pointer-events-none">
               <div className="flex flex-col items-center gap-3 bg-white/95 px-6 py-4 rounded-2xl shadow-2xl">
                 <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
                 <span className="text-sm font-bold text-zinc-800">Scanning Image Text...</span>
               </div>
-              {/* Laser line effect */}
               <div
                 className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_15px_#10b981] animate-bounce"
-                style={{ top: '40%' }}
+                style={{ top: '45%' }}
               />
             </div>
           )}
 
-          {/* Canvas container */}
+          {/* Canvas */}
           <div
             className="relative transition-transform duration-75 origin-center shadow-xl rounded-sm bg-white"
             style={{
@@ -357,7 +351,6 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
               draggable={false}
             />
 
-            {/* Split Comparison View */}
             {compareMode && (
               <div
                 className="absolute inset-0 overflow-hidden pointer-events-none z-20"
@@ -372,7 +365,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
               </div>
             )}
 
-            {/* Discrete Text Lines as in photext.ai video */}
+            {/* Rendered Discrete Detected Lines */}
             {!isScanning &&
               layers.map((layer) => {
                 if (!layer.visible || layer.isRemoved) return null;
@@ -402,13 +395,13 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
                       height: `${layer.height}px`,
                     }}
                   >
-                    {/* Dark pill masking original line */}
+                    {/* Underlying dark masking pill */}
                     <div
                       className="absolute inset-0 bg-[#16191d] rounded-xs pointer-events-none"
                       style={{ margin: '-1px -2px' }}
                     />
 
-                    {/* Updated text rendered directly on image */}
+                    {/* Live text line */}
                     <div
                       className="relative z-10 whitespace-nowrap overflow-hidden text-ellipsis leading-none select-none flex items-center h-full px-0.5"
                       style={{
@@ -421,10 +414,10 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
                       {layer.text}
                     </div>
 
-                    {/* Floating Popover on Selected Line (Video Feature) */}
+                    {/* Popover Edit Input on Selected Line */}
                     {isSelected && (
                       <div
-                        className="absolute -top-16 left-0 bg-white border border-zinc-200 rounded-lg shadow-xl p-2 z-40 flex items-center gap-2 animate-in fade-in"
+                        className="absolute -top-14 left-0 bg-white border border-zinc-200 rounded-lg shadow-xl p-2 z-40 flex items-center gap-2 animate-in fade-in"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <span className="text-[10px] font-bold text-zinc-400 uppercase">Edit:</span>
@@ -441,7 +434,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
               })}
           </div>
 
-          {/* Bottom Left Compare */}
+          {/* Bottom Left: Compare */}
           <div className="absolute bottom-5 left-8 z-30">
             <button
               onClick={() => setCompareMode(!compareMode)}
@@ -456,7 +449,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
             </button>
           </div>
 
-          {/* Bottom Right Zoom */}
+          {/* Bottom Right: Zoom */}
           <div className="absolute bottom-5 right-8 z-30 flex items-center bg-white border border-zinc-200 rounded-lg shadow-md px-1 py-0.5 text-xs text-zinc-700">
             <button
               onClick={() => handleZoom(-0.1)}
@@ -476,7 +469,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
           </div>
         </div>
 
-        {/* 3. RIGHT INSPECTOR COLUMN: Edit the Selected Line */}
+        {/* Right Inspector */}
         <aside className="w-80 xl:w-96 bg-white border-l border-zinc-200 flex flex-col text-xs text-zinc-800 select-none overflow-hidden shrink-0 shadow-sm z-20">
           {selectedLayer ? (
             <>
