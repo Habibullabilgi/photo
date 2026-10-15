@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { LandingView } from './components/LandingView';
 import { StudioEditor } from './components/StudioEditor';
 import { ExportModal } from './components/ExportModal';
-import { TextLayer, DetectedTextResponse } from './types';
+import { TextLayer } from './types';
 import { SAMPLE_PRESETS, SamplePreset } from './utils/sampleImages';
 import { inpaintImageRegions } from './utils/inpainter';
 import { ensureFontLoaded } from './utils/fonts';
