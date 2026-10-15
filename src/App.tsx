@@ -128,7 +128,7 @@ export default function App() {
     }
   };
 
-  // Upload Custom Image
+  // Upload Custom Image (Loads cleanly and pristine without distortion)
   const handleUploadImage = (file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -145,16 +145,13 @@ export default function App() {
         setLayers([]);
         setSelectedLayerId(null);
         setViewMode('editor');
-
-        // Automatically scan text in the uploaded image
-        triggerOcrScan(dataUrl, w, h);
       };
       img.src = dataUrl;
     };
     reader.readAsDataURL(file);
   };
 
-  // Scan text present in the image (with smart local fallback for uploaded photos)
+  // Scan text present in the image via backend OCR API
   const triggerOcrScan = async (imgDataUrl?: string, customW?: number, customH?: number) => {
     const targetUrl = imgDataUrl || currentImageUrl;
     const w = customW || imageWidth;
@@ -179,23 +176,17 @@ export default function App() {
         base64 = c.toDataURL('image/jpeg', 0.85);
       }
 
-      let detected: DetectedTextResponse[] = [];
-      try {
-        const res = await fetch('/api/detect-text', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64: base64 }),
-        });
-        const data = await res.json();
-        detected = data.detectedTexts || [];
-      } catch (err) {
-        console.warn('OCR API endpoint not available, using smart local detection.');
-      }
+      const res = await fetch('/api/detect-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: base64 }),
+      });
 
-      let activeLayers: TextLayer[] = [];
+      const data = await res.json();
+      const detected: DetectedTextResponse[] = data.detectedTexts || [];
 
       if (detected.length > 0) {
-        activeLayers = detected.map((item, index) => {
+        const newLayers: TextLayer[] = detected.map((item, index) => {
           const [ymin, xmin, ymax, xmax] = item.box_2d || [200, 200, 300, 800];
           const lx = Math.round((xmin / 1000) * w);
           const ly = Math.round((ymin / 1000) * h);
@@ -241,69 +232,32 @@ export default function App() {
             visible: true,
           };
         });
-      } else {
-        // SMART LOCAL FALLBACK: Automatically box the GPS watermark area neatly at the bottom
-        activeLayers = [
-          {
-            id: `text-gps-${Date.now()}`,
-            text: 'Vijayapura, Karnataka, India\nBasaveshwara Circle, Tikota, Vijayapura, Karnataka 586130, India\nLat 16.840921, Long 75.520480\nFriday, 03/04/2026 12:23 PM GMT+05:30\nNote : Captured by GPS Map Camera',
-            x: Math.round(w * 0.28),
-            y: Math.round(h * 0.65),
-            width: Math.round(w * 0.44),
-            height: Math.round(h * 0.18),
-            rotation: 0,
-            fontFamily: 'Inter',
-            fontSize: 13,
-            fontWeight: 500,
-            fontStyle: 'normal',
-            color: '#ffffff',
-            opacity: 1,
-            textAlign: 'left',
-            letterSpacing: 0.5,
-            lineHeight: 1.2,
-            textTransform: 'none',
-            textDecoration: 'none',
-            stroke: { enabled: false, color: '#000', width: 2 },
-            shadow: { enabled: true, color: 'rgba(0,0,0,0.8)', blur: 6, offsetX: 0, offsetY: 1 },
-            glow: { enabled: false, color: '#fff', blur: 0 },
-            gradient: { enabled: false, type: 'linear', angle: 0, startColor: '#fff', endColor: '#aaa' },
-            backgroundBadge: { enabled: true, color: '#000000', opacity: 0.65, paddingX: 10, paddingY: 6, borderRadius: 4 },
-            arc: { enabled: false, curvature: 0 },
-            blendMode: 'source-over',
-            isOriginalDetected: true,
-            originalText: 'Vijayapura, Karnataka, India',
-            isInpainted: true,
-            locked: false,
-            visible: true,
-          }
-        ];
+
+        // Seamlessly inpaint behind detected text regions only
+        setIsInpainting(true);
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = reject;
+          img.src = targetUrl;
+        });
+
+        const restoredUrl = await inpaintImageRegions(
+          img,
+          newLayers.map((l) => ({
+            x: l.x,
+            y: l.y,
+            width: l.width,
+            height: l.height,
+            fallbackBgColor: l.originalBgColor,
+          }))
+        );
+
+        setCurrentImageUrl(restoredUrl);
+        setLayers(newLayers);
+        setSelectedLayerId(newLayers[0]?.id || null);
       }
-
-      // Seamlessly inpaint behind the detected/fallback text box
-      setIsInpainting(true);
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = reject;
-        img.src = targetUrl;
-      });
-
-      const restoredUrl = await inpaintImageRegions(
-        img,
-        activeLayers.map((l) => ({
-          x: l.x,
-          y: l.y,
-          width: l.width,
-          height: l.height,
-          fallbackBgColor: l.originalBgColor,
-        }))
-      );
-
-      setCurrentImageUrl(restoredUrl);
-      setLayers(activeLayers);
-      setSelectedLayerId(activeLayers[0]?.id || null);
-
     } catch (e) {
       console.error('Scan text failed:', e);
     } finally {
