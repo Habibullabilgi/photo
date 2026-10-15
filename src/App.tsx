@@ -230,11 +230,11 @@ export default function App() {
           };
         });
       } else {
-        // Fits right over the GPS Map Camera text block beside the map thumbnail
-        const boxX = Math.round(w * 0.288);
-        const boxY = Math.round(h * 0.760);
-        const boxW = Math.round(w * 0.245);
-        const boxH = Math.round(h * 0.165);
+        // Fits directly over the embedded GPS text block to the right of the thumbnail map
+        const boxX = Math.round(w * 0.312);
+        const boxY = Math.round(h * 0.768);
+        const boxW = Math.round(w * 0.362);
+        const boxH = Math.round(h * 0.176);
 
         activeLayers = [
           {
@@ -252,7 +252,7 @@ export default function App() {
             color: '#ffffff',
             opacity: 1,
             textAlign: 'left',
-            letterSpacing: 0.1,
+            letterSpacing: 0,
             lineHeight: 1.25,
             textTransform: 'none',
             textDecoration: 'none',
