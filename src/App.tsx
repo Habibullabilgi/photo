@@ -230,10 +230,10 @@ export default function App() {
           };
         });
       } else {
-        // Fits directly over the text lines in the GPS banner
-        const boxX = Math.round(w * 0.265);
-        const boxY = Math.round(h * 0.732);
-        const boxW = Math.round(w * 0.645);
+        // Fits right over the GPS Map Camera text block beside the map thumbnail
+        const boxX = Math.round(w * 0.288);
+        const boxY = Math.round(h * 0.760);
+        const boxW = Math.round(w * 0.245);
         const boxH = Math.round(h * 0.165);
 
         activeLayers = [
@@ -246,21 +246,21 @@ export default function App() {
             height: boxH,
             rotation: 0,
             fontFamily: 'Arial',
-            fontSize: 10.5,
-            fontWeight: 500,
+            fontSize: 7.2,
+            fontWeight: 400,
             fontStyle: 'normal',
             color: '#ffffff',
             opacity: 1,
             textAlign: 'left',
-            letterSpacing: 0.2,
-            lineHeight: 1.35,
+            letterSpacing: 0.1,
+            lineHeight: 1.25,
             textTransform: 'none',
             textDecoration: 'none',
             stroke: { enabled: false, color: '#000', width: 1 },
-            shadow: { enabled: true, color: 'rgba(0,0,0,0.9)', blur: 2, offsetX: 0, offsetY: 1 },
+            shadow: { enabled: true, color: 'rgba(0,0,0,0.85)', blur: 2, offsetX: 0, offsetY: 1 },
             glow: { enabled: false, color: '#fff', blur: 0 },
             gradient: { enabled: false, type: 'linear', angle: 0, startColor: '#fff', endColor: '#aaa' },
-            backgroundBadge: { enabled: true, color: '#181b20', opacity: 0.94, paddingX: 6, paddingY: 4, borderRadius: 4 },
+            backgroundBadge: { enabled: false, color: '#000000', opacity: 0, paddingX: 0, paddingY: 0, borderRadius: 0 },
             arc: { enabled: false, curvature: 0 },
             blendMode: 'source-over',
             isOriginalDetected: true,
