@@ -13,18 +13,14 @@ import {
   MessageSquare,
   ZoomIn,
   ZoomOut,
-  Maximize2,
   SplitSquareVertical,
   Pipette,
   Check,
   ChevronLeft,
   ChevronRight,
-  RotateCcw,
-  Crop,
-  Layers,
 } from 'lucide-react';
 import { TextLayer } from '../types';
-import { AVAILABLE_FONTS, ensureFontLoaded } from '../utils/fonts';
+import { ensureFontLoaded } from '../utils/fonts';
 import { SAMPLE_PRESETS, SamplePreset } from '../utils/sampleImages';
 
 interface StudioEditorProps {
@@ -76,6 +72,14 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [startPan, setStartPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Direct On-Image Editing
+  const [isDirectEditing, setIsDirectEditing] = useState<boolean>(false);
+
+  // Dragging & Resizing Layer on Canvas
+  const [isDraggingLayer, setIsDraggingLayer] = useState(false);
+  const [isResizingLayer, setIsResizingLayer] = useState(false);
+  const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // Compare mode
   const [compareMode, setCompareMode] = useState<boolean>(false);
@@ -150,14 +154,24 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
       const percent = Math.max(5, Math.min(95, (relativeX / rect.width) * 100));
       setSplitPos(percent);
     }
+    if (isDraggingLayer && selectedLayer) {
+      const newX = Math.round((e.clientX - dragOffset.x) / zoom);
+      const newY = Math.round((e.clientY - dragOffset.y) / zoom);
+      onUpdateLayer(selectedLayer.id, { x: newX, y: newY });
+    }
+    if (isResizingLayer && selectedLayer) {
+      const newW = Math.max(50, Math.round((e.clientX - dragOffset.x) / zoom));
+      onUpdateLayer(selectedLayer.id, { width: newW });
+    }
   };
 
   const handleMouseUp = () => {
     setIsPanning(false);
     setIsDraggingSplit(false);
+    setIsDraggingLayer(false);
+    setIsResizingLayer(false);
   };
 
-  // Eyedropper API
   const handleEyeDropper = async () => {
     if ('EyeDropper' in window && selectedLayer) {
       try {
@@ -181,7 +195,6 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
     }, 700);
   };
 
-  // Font category cards
   const FONT_PREVIEWS = [
     { name: 'Arial', family: 'Inter', sample: '0123456789,.+-' },
     { name: 'Helvetica', family: 'Roboto', sample: '0123456789,.+-' },
@@ -195,9 +208,8 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
 
   return (
     <div className="h-screen w-screen flex flex-col bg-[#eef0f3] text-zinc-900 select-none overflow-hidden font-sans">
-      {/* 1. TOP NAVBAR (Screenshot 2: photext.ai, filename dropdown, Download button) */}
+      {/* 1. TOP NAVBAR */}
       <header className="h-13 bg-white border-b border-zinc-200 px-4 flex items-center justify-between z-30 shrink-0 shadow-xs">
-        {/* Logo & Back */}
         <div className="flex items-center gap-4">
           <button
             onClick={onBackToHome}
@@ -260,7 +272,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
           )}
         </div>
 
-        {/* Right: Download Button */}
+        {/* Right Actions */}
         <div className="flex items-center gap-3">
           <button
             onClick={onScanText}
@@ -297,9 +309,9 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
         </div>
       </header>
 
-      {/* 2. MAIN WORKSPACE (Left tool strip + Canvas with rulers + Right Text Inspector) */}
+      {/* 2. MAIN WORKSPACE */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* LEFT TOOL STRIP (Screenshot 2: Adjust, Removal, Add, Effects, Text, AI, Shortcuts, Feedback) */}
+        {/* Left tool strip */}
         <aside className="w-16 bg-white border-r border-zinc-200 flex flex-col items-center py-3 select-none shrink-0 z-20">
           <div className="space-y-1 w-full px-2">
             {[
@@ -349,7 +361,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
           </div>
         </aside>
 
-        {/* CENTER CANVAS WITH RULERS (Screenshot 2: rulers along top & left, canvas with photo & pink dashed box) */}
+        {/* Center Canvas */}
         <div
           ref={containerRef}
           onMouseDown={handleMouseDown}
@@ -385,15 +397,14 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
             </div>
           </div>
 
-          {/* Inpainting status alert */}
           {isInpainting && (
             <div className="absolute top-6 z-40 bg-zinc-900/90 text-white text-xs px-3.5 py-1.5 rounded-full flex items-center gap-2 shadow-lg backdrop-blur">
               <Wand2 className="w-3.5 h-3.5 text-pink-400 animate-spin" />
-              <span>Seamlessly restoring photo background...</span>
+              <span>Seamlessly updating photo...</span>
             </div>
           )}
 
-          {/* The Photo & Interactive Text Canvas */}
+          {/* Canvas container */}
           <div
             className="relative transition-transform duration-75 origin-center shadow-xl rounded-sm bg-white"
             style={{
@@ -401,9 +412,11 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
               height: `${height}px`,
               transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
             }}
-            onClick={() => onSelectLayer(null)}
+            onClick={() => {
+              setIsDirectEditing(false);
+              onSelectLayer(null);
+            }}
           >
-            {/* Background Image (Inpainted background when text is edited) */}
             <img
               src={imageUrl}
               alt="Artwork"
@@ -411,7 +424,6 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
               draggable={false}
             />
 
-            {/* Split Comparison View */}
             {compareMode && (
               <div
                 className="absolute inset-0 overflow-hidden pointer-events-none z-20"
@@ -444,7 +456,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
               </div>
             )}
 
-            {/* Text items detected in photo */}
+            {/* Direct Interactive Text Overlay */}
             {layers.map((layer) => {
               if (!layer.visible || layer.isRemoved) return null;
               const isSelected = selectedLayerId === layer.id;
@@ -456,7 +468,22 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
                     e.stopPropagation();
                     onSelectLayer(layer.id);
                   }}
-                  className={`absolute select-none cursor-pointer transition-all ${
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    onSelectLayer(layer.id);
+                    setIsDirectEditing(true);
+                  }}
+                  onMouseDown={(e) => {
+                    if (isSelected && !isDirectEditing) {
+                      e.stopPropagation();
+                      setIsDraggingLayer(true);
+                      setDragOffset({
+                        x: e.clientX - layer.x * zoom,
+                        y: e.clientY - layer.y * zoom,
+                      });
+                    }
+                  }}
+                  className={`absolute transition-all cursor-move ${
                     isSelected
                       ? 'border-2 border-dashed border-pink-500 z-30'
                       : 'hover:border-2 hover:border-dashed hover:border-pink-300 z-10'
@@ -470,7 +497,6 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
                     opacity: layer.opacity,
                   }}
                 >
-                  {/* Background badge if enabled */}
                   {layer.backgroundBadge.enabled && (
                     <div
                       className="absolute inset-0 rounded pointer-events-none"
@@ -483,38 +509,68 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
                     />
                   )}
 
-                  {/* Rendered Text */}
-                  <div
-                    className="relative whitespace-pre-wrap leading-tight p-0.5"
-                    style={{
-                      fontFamily: `"${layer.fontFamily}", sans-serif`,
-                      fontSize: `${layer.fontSize}px`,
-                      fontWeight: layer.fontWeight,
-                      fontStyle: layer.fontStyle,
-                      color: layer.color,
-                      textAlign: layer.textAlign,
-                      letterSpacing: `${layer.letterSpacing}px`,
-                      lineHeight: layer.lineHeight,
-                      textTransform: layer.textTransform,
-                      textShadow: layer.shadow.enabled
-                        ? `${layer.shadow.offsetX}px ${layer.shadow.offsetY}px ${layer.shadow.blur}px ${layer.shadow.color}`
-                        : 'none',
-                    }}
-                  >
-                    {layer.text}
-                  </div>
+                  {/* Direct editing inside the image itself */}
+                  {isSelected && isDirectEditing ? (
+                    <textarea
+                      autoFocus
+                      value={layer.text}
+                      onChange={(e) => onUpdateLayer(layer.id, { text: e.target.value })}
+                      onBlur={() => setIsDirectEditing(false)}
+                      className="w-full h-full bg-transparent border-0 outline-none resize-none p-0.5 leading-tight select-text"
+                      style={{
+                        fontFamily: `"${layer.fontFamily}", sans-serif`,
+                        fontSize: `${layer.fontSize}px`,
+                        fontWeight: layer.fontWeight,
+                        fontStyle: layer.fontStyle,
+                        color: layer.color,
+                        textAlign: layer.textAlign,
+                        letterSpacing: `${layer.letterSpacing}px`,
+                        lineHeight: layer.lineHeight,
+                        textTransform: layer.textTransform,
+                      }}
+                    />
+                  ) : (
+                    <div
+                      className="relative whitespace-pre-wrap leading-tight p-0.5"
+                      style={{
+                        fontFamily: `"${layer.fontFamily}", sans-serif`,
+                        fontSize: `${layer.fontSize}px`,
+                        fontWeight: layer.fontWeight,
+                        fontStyle: layer.fontStyle,
+                        color: layer.color,
+                        textAlign: layer.textAlign,
+                        letterSpacing: `${layer.letterSpacing}px`,
+                        lineHeight: layer.lineHeight,
+                        textTransform: layer.textTransform,
+                        textShadow: layer.shadow.enabled
+                          ? `${layer.shadow.offsetX}px ${layer.shadow.offsetY}px ${layer.shadow.blur}px ${layer.shadow.color}`
+                          : 'none',
+                      }}
+                    >
+                      {layer.text}
+                    </div>
+                  )}
 
-                  {/* Pink Anchor Handles when selected (Screenshot 2 exact style) */}
-                  {isSelected && (
+                  {/* Pink Anchor Handles */}
+                  {isSelected && !isDirectEditing && (
                     <>
-                      {/* Top-Left & Bottom-Right circles */}
                       <div className="absolute -top-1.5 -left-1.5 w-3 h-3 rounded-full bg-pink-500 shadow border border-white" />
                       <div className="absolute -top-1.5 -right-1.5 w-3 h-3 rounded-full bg-pink-500 shadow border border-white" />
                       <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 rounded-full bg-pink-500 shadow border border-white" />
                       <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 rounded-full bg-pink-500 shadow border border-white" />
 
-                      {/* Right Edge Arrow Handle: ↔ */}
-                      <div className="absolute -right-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-pink-500 font-extrabold text-xs">
+                      {/* Right Edge Arrow Handle for quick width resize */}
+                      <div
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          setIsResizingLayer(true);
+                          setDragOffset({
+                            x: e.clientX - layer.width * zoom,
+                            y: 0,
+                          });
+                        }}
+                        className="absolute -right-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-pink-500 font-extrabold text-xs cursor-ew-resize hover:scale-125 transition-transform"
+                      >
                         ↔
                       </div>
                     </>
@@ -524,7 +580,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
             })}
           </div>
 
-          {/* Bottom Left: Compare Button (Screenshot 2: [ 📷 Compare ]) */}
+          {/* Bottom Left Compare */}
           <div className="absolute bottom-5 left-8 z-30">
             <button
               onClick={() => setCompareMode(!compareMode)}
@@ -539,7 +595,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
             </button>
           </div>
 
-          {/* Bottom Right: Zoom Controls (Screenshot 2: [ 🔍- ] [ 62% ] [ 🔍+ ]) */}
+          {/* Bottom Right Zoom */}
           <div className="absolute bottom-5 right-8 z-30 flex items-center bg-white border border-zinc-200 rounded-lg shadow-md px-1 py-0.5 text-xs text-zinc-700">
             <button
               onClick={() => handleZoom(-0.1)}
@@ -561,11 +617,10 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
           </div>
         </div>
 
-        {/* 3. RIGHT PANEL: EXACT PHOTEXT TEXT INSPECTOR (Screenshot 2) */}
+        {/* 3. RIGHT PANEL INSPECTOR */}
         <aside className="w-80 xl:w-96 bg-white border-l border-zinc-200 flex flex-col text-xs text-zinc-800 select-none overflow-hidden shrink-0 shadow-sm z-20">
           {selectedLayer ? (
             <>
-              {/* Top Action Bar: Unselect on left, Reset in red on right */}
               <div className="p-3 border-b border-zinc-200 flex items-center justify-between">
                 <button
                   onClick={() => onSelectLayer(null)}
@@ -581,9 +636,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
                 </button>
               </div>
 
-              {/* Scrollable Inspector Body */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {/* Multiline Text Input Area (Screenshot 2: shows location/date or text content) */}
                 <div>
                   <textarea
                     value={selectedLayer.text}
@@ -603,7 +656,6 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
                   </div>
                 </div>
 
-                {/* Font Section (Screenshot 2) */}
                 <div className="space-y-2.5 pt-1 border-t border-zinc-100">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-zinc-800 text-xs">Font</span>
@@ -617,7 +669,6 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
                     </button>
                   </div>
 
-                  {/* Category carousel: < Preset | Local Fonts | Sans Serif | Serif | Display | Handwriting > */}
                   <div className="flex items-center justify-between border-b border-zinc-200 pb-1.5 text-[11px] text-zinc-500">
                     <button className="p-0.5 hover:text-zinc-900">
                       <ChevronLeft className="w-3.5 h-3.5" />
@@ -640,7 +691,6 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
                     </button>
                   </div>
 
-                  {/* 2-Column Font Cards Grid (Screenshot 2: Arial, Helvetica, Microsoft YaHei, Calibri, etc.) */}
                   <div className="grid grid-cols-2 gap-2 max-h-44 overflow-y-auto pr-0.5">
                     {FONT_PREVIEWS.map((f) => (
                       <button
@@ -667,7 +717,6 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
                   </div>
                 </div>
 
-                {/* Typography Controls: Size, Weight, Color */}
                 <div className="space-y-3 pt-2 border-t border-zinc-100">
                   <div className="flex items-center justify-between">
                     <span className="text-zinc-600 font-medium">Font Size</span>
@@ -731,9 +780,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
                   </div>
                 </div>
 
-                {/* Collapsible Accordions (Screenshot 2: Position, Original Text, Shadow, Effect) */}
                 <div className="pt-2 border-t border-zinc-100 space-y-1">
-                  {/* Position Accordion */}
                   <div className="border border-zinc-200 rounded-xl overflow-hidden">
                     <button
                       onClick={() => toggleSection('position')}
@@ -774,7 +821,6 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
                     )}
                   </div>
 
-                  {/* Original Text Accordion */}
                   <div className="border border-zinc-200 rounded-xl overflow-hidden">
                     <button
                       onClick={() => toggleSection('original')}
@@ -796,7 +842,6 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
                     )}
                   </div>
 
-                  {/* Shadow Accordion */}
                   <div className="border border-zinc-200 rounded-xl overflow-hidden">
                     <button
                       onClick={() => toggleSection('shadow')}
@@ -848,7 +893,6 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
                     )}
                   </div>
 
-                  {/* Effect Accordion */}
                   <div className="border border-zinc-200 rounded-xl overflow-hidden">
                     <button
                       onClick={() => toggleSection('effect')}
