@@ -161,7 +161,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
 
   return (
     <div className="h-screen w-screen flex flex-col bg-[#eef0f3] text-zinc-900 select-none overflow-hidden font-sans">
-      {/* Header */}
+      {/* 1. Header */}
       <header className="h-13 bg-white border-b border-zinc-200 px-4 flex items-center justify-between z-30 shrink-0">
         <div className="flex items-center gap-4">
           <button
@@ -259,7 +259,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
         </div>
       </header>
 
-      {/* Main Workspace */}
+      {/* 2. Main Studio Area */}
       <div className="flex-1 flex overflow-hidden relative">
         {/* Left Toolbar */}
         <aside className="w-16 bg-white border-r border-zinc-200 flex flex-col items-center py-3 select-none shrink-0 z-20">
@@ -321,7 +321,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
             backgroundSize: '16px 16px',
           }}
         >
-          {/* Green Laser Scan Overlay from Video */}
+          {/* Laser Scan Animation Overlay */}
           {isScanning && (
             <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/40 backdrop-blur-xs pointer-events-none">
               <div className="flex flex-col items-center gap-3 bg-white/95 px-6 py-4 rounded-2xl shadow-2xl">
@@ -335,7 +335,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
             </div>
           )}
 
-          {/* Canvas */}
+          {/* Canvas container */}
           <div
             className="relative transition-transform duration-75 origin-center shadow-xl rounded-sm bg-white"
             style={{
@@ -351,6 +351,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
               draggable={false}
             />
 
+            {/* Split Comparison View */}
             {compareMode && (
               <div
                 className="absolute inset-0 overflow-hidden pointer-events-none z-20"
@@ -395,13 +396,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
                       height: `${layer.height}px`,
                     }}
                   >
-                    {/* Underlying dark masking pill */}
-                    <div
-                      className="absolute inset-0 bg-[#16191d] rounded-xs pointer-events-none"
-                      style={{ margin: '-1px -2px' }}
-                    />
-
-                    {/* Live text line */}
+                    {/* Live text line - transparent background */}
                     <div
                       className="relative z-10 whitespace-nowrap overflow-hidden text-ellipsis leading-none select-none flex items-center h-full px-0.5"
                       style={{
@@ -409,25 +404,28 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
                         fontSize: `${layer.fontSize}px`,
                         fontWeight: layer.fontWeight,
                         color: layer.color || '#ffffff',
+                        textShadow: layer.shadow?.enabled
+                          ? `${layer.shadow.offsetX}px ${layer.shadow.offsetY}px ${layer.shadow.blur}px ${layer.shadow.color}`
+                          : 'none',
                       }}
                     >
                       {layer.text}
                     </div>
 
-                    {/* Popover Edit Input on Selected Line */}
+                    {/* Pink selection corners & resize handles */}
                     {isSelected && (
-                      <div
-                        className="absolute -top-14 left-0 bg-white border border-zinc-200 rounded-lg shadow-xl p-2 z-40 flex items-center gap-2 animate-in fade-in"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <span className="text-[10px] font-bold text-zinc-400 uppercase">Edit:</span>
-                        <input
-                          type="text"
-                          value={layer.text}
-                          onChange={(e) => onUpdateLayer(layer.id, { text: e.target.value })}
-                          className="px-2 py-1 text-xs border border-zinc-300 rounded font-medium text-zinc-800 focus:outline-pink-500 w-64"
-                        />
-                      </div>
+                      <>
+                        <div className="absolute -top-1.5 -left-1.5 w-3 h-3 rounded-full bg-pink-500 shadow border border-white pointer-events-none" />
+                        <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 rounded-full bg-pink-500 shadow border border-white pointer-events-none" />
+                        <div
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                          }}
+                          className="absolute -right-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-pink-500 font-extrabold text-xs cursor-ew-resize hover:scale-125 transition-transform select-none"
+                        >
+                          ↔
+                        </div>
+                      </>
                     )}
                   </div>
                 );
@@ -469,7 +467,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
           </div>
         </div>
 
-        {/* Right Inspector */}
+        {/* 3. RIGHT INSPECTOR COLUMN: Edit Selected Line Directly */}
         <aside className="w-80 xl:w-96 bg-white border-l border-zinc-200 flex flex-col text-xs text-zinc-800 select-none overflow-hidden shrink-0 shadow-sm z-20">
           {selectedLayer ? (
             <>
@@ -523,6 +521,28 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
                     >
                       <Wand2 className={`w-3 h-3 text-pink-500 ${isIdentifying ? 'animate-spin' : ''}`} />
                       <span>{isIdentifying ? 'Identifying...' : 'Identify font'}</span>
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between border-b border-zinc-200 pb-1.5 text-[11px] text-zinc-500">
+                    <button className="p-0.5 hover:text-zinc-900">
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+                    {['Preset', 'Local Fonts', 'Sans Serif', 'Serif', 'Display'].map((cat) => (
+                      <button
+                        key={cat}
+                        onClick={() => setFontCategory(cat)}
+                        className={`px-1.5 py-0.5 rounded ${
+                          fontCategory === cat
+                            ? 'text-zinc-900 font-bold border-b-2 border-zinc-900'
+                            : 'hover:text-zinc-900'
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                    <button className="p-0.5 hover:text-zinc-900">
+                      <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
 
