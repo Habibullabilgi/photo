@@ -9,7 +9,7 @@ import { ensureFontLoaded } from './utils/fonts';
 
 export default function App() {
   // View mode: 'landing' (Screenshot 1) vs 'editor' (Screenshot 2)
-  const [viewMode, setViewMode] = useState<'landing' | 'editor'>('editor');
+  const [viewMode, setViewMode] = useState<'landing' | 'editor'>('landing');
 
   // Current Preset / Image State
   const [currentPreset, setCurrentPreset] = useState<SamplePreset>(SAMPLE_PRESETS[0]);
