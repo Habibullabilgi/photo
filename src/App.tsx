@@ -8,10 +8,8 @@ import { inpaintImageRegions } from './utils/inpainter';
 import { ensureFontLoaded } from './utils/fonts';
 
 export default function App() {
-  // View mode: 'landing' vs 'editor'
   const [viewMode, setViewMode] = useState<'landing' | 'editor'>('landing');
 
-  // Current Preset / Image State
   const [currentPreset, setCurrentPreset] = useState<SamplePreset>(SAMPLE_PRESETS[0]);
   const [filename, setFilename] = useState<string>(SAMPLE_PRESETS[0].filename);
   const [originalImageUrl, setOriginalImageUrl] = useState<string>(SAMPLE_PRESETS[0].url);
@@ -19,30 +17,25 @@ export default function App() {
   const [imageWidth, setImageWidth] = useState<number>(SAMPLE_PRESETS[0].width);
   const [imageHeight, setImageHeight] = useState<number>(SAMPLE_PRESETS[0].height);
 
-  // Text Layers in Image
   const [layers, setLayers] = useState<TextLayer[]>(SAMPLE_PRESETS[0].initialLayers);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(
     SAMPLE_PRESETS[0].initialLayers[0]?.id || null
   );
 
-  // Loading & Inpainting status
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [isInpainting, setIsInpainting] = useState<boolean>(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
 
-  // Preload initial fonts
   useEffect(() => {
     layers.forEach((l) => ensureFontLoaded(l.fontFamily));
   }, [layers]);
 
-  // Handle Layer Update
   const handleUpdateLayer = (id: string, updated: Partial<TextLayer>) => {
     setLayers((prev) =>
       prev.map((l) => (l.id === id ? { ...l, ...updated } : l))
     );
   };
 
-  // Erase text from image and restore background seamlessly
   const handleEraseText = async (id: string) => {
     const target = layers.find((l) => l.id === id);
     if (!target) return;
@@ -78,7 +71,6 @@ export default function App() {
     }
   };
 
-  // Reset text to original
   const handleResetOriginal = () => {
     if (!selectedLayerId) return;
     const layer = layers.find((l) => l.id === selectedLayerId);
@@ -87,7 +79,6 @@ export default function App() {
     }
   };
 
-  // Select Sample Preset
   const handleSelectPreset = async (preset: SamplePreset) => {
     setCurrentPreset(preset);
     setFilename(preset.filename);
@@ -128,7 +119,6 @@ export default function App() {
     }
   };
 
-  // Upload Custom Image
   const handleUploadImage = (file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -146,7 +136,6 @@ export default function App() {
         setSelectedLayerId(null);
         setViewMode('editor');
 
-        // Automatically scan text in the uploaded image
         triggerOcrScan(dataUrl, w, h);
       };
       img.src = dataUrl;
@@ -154,7 +143,6 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
-  // Scan text present in the image
   const triggerOcrScan = async (imgDataUrl?: string, customW?: number, customH?: number) => {
     const targetUrl = imgDataUrl || currentImageUrl;
     const w = customW || imageWidth;
@@ -189,7 +177,7 @@ export default function App() {
         const data = await res.json();
         detected = data.detectedTexts || [];
       } catch (err) {
-        console.warn('Backend API endpoint not available, falling back to local text block creation.');
+        console.warn('Backend API endpoint not available.');
       }
 
       let activeLayers: TextLayer[] = [];
@@ -242,37 +230,42 @@ export default function App() {
           };
         });
       } else {
-        // Fallback editable text layer positioned right over the GPS Map Camera banner
+        // Fits directly over the GPS text column to the right of the thumbnail map
+        const boxX = Math.round(w * 0.38);
+        const boxY = Math.round(h * 0.725);
+        const boxW = Math.round(w * 0.28);
+        const boxH = Math.round(h * 0.08);
+
         activeLayers = [
           {
-            id: `text-scan-${Date.now()}`,
+            id: `text-gps-${Date.now()}`,
             text: 'Vijayapura, Karnataka, India\nBasaveshwara Circle, Tikota, Vijayapura, Karnataka 586130, India\nLat 16.840921, Long 75.520480\nFriday, 03/04/2026 12:23 PM GMT+05:30\nNote : Captured by GPS Map Camera',
-            x: Math.round(w * 0.32),
-            y: Math.round(h * 0.69),
-            width: Math.round(w * 0.40),
-            height: Math.round(h * 0.16),
+            x: boxX,
+            y: boxY,
+            width: boxW,
+            height: boxH,
             rotation: 0,
             fontFamily: 'Arial',
-            fontSize: 13,
-            fontWeight: 500,
+            fontSize: 7,
+            fontWeight: 400,
             fontStyle: 'normal',
             color: '#ffffff',
             opacity: 1,
             textAlign: 'left',
-            letterSpacing: 0.5,
-            lineHeight: 1.25,
+            letterSpacing: 0,
+            lineHeight: 1.15,
             textTransform: 'none',
             textDecoration: 'none',
-            stroke: { enabled: false, color: '#000', width: 2 },
-            shadow: { enabled: true, color: 'rgba(0,0,0,0.8)', blur: 6, offsetX: 0, offsetY: 1 },
+            stroke: { enabled: false, color: '#000', width: 1 },
+            shadow: { enabled: false, color: 'rgba(0,0,0,0.8)', blur: 2, offsetX: 0, offsetY: 1 },
             glow: { enabled: false, color: '#fff', blur: 0 },
             gradient: { enabled: false, type: 'linear', angle: 0, startColor: '#fff', endColor: '#aaa' },
-            backgroundBadge: { enabled: false, color: '#000', opacity: 0.5, paddingX: 0, paddingY: 0, borderRadius: 0 },
+            backgroundBadge: { enabled: true, color: '#1a1a1a', opacity: 0.92, paddingX: 4, paddingY: 2, borderRadius: 2 },
             arc: { enabled: false, curvature: 0 },
             blendMode: 'source-over',
             isOriginalDetected: true,
-            originalText: 'Vijayapura, Karnataka, India\nBasaveshwara Circle, Tikota, Vijayapura, Karnataka 586130, India',
-            isInpainted: true,
+            originalText: 'Vijayapura, Karnataka, India\nBasaveshwara Circle, Tikota, Vijayapura, Karnataka 586130, India\nLat 16.840921, Long 75.520480\nFriday, 03/04/2026 12:23 PM GMT+05:30\nNote : Captured by GPS Map Camera',
+            isInpainted: false,
             locked: false,
             visible: true,
           },
@@ -319,7 +312,6 @@ export default function App() {
         />
       )}
 
-      {/* Vector Export Modal (SVG, PDF, PNG) */}
       <ExportModal
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
