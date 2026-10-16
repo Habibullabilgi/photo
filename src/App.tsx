@@ -28,44 +28,10 @@ export default function App() {
     layers.forEach((l) => ensureFontLoaded(l.fontFamily));
   }, [layers]);
 
-  // Direct pixel replacement: inpaint the original text beneath when altered
-  const handleUpdateLayer = async (id: string, updated: Partial<TextLayer>) => {
+  const handleUpdateLayer = (id: string, updated: Partial<TextLayer>) => {
     setLayers((prev) =>
       prev.map((l) => (l.id === id ? { ...l, ...updated } : l))
     );
-
-    const target = layers.find((l) => l.id === id);
-    if (target && !target.isInpainted && updated.text !== undefined && updated.text !== target.originalText) {
-      setIsInpainting(true);
-      try {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        await new Promise<void>((resolve, reject) => {
-          img.onload = () => resolve();
-          img.onerror = reject;
-          img.src = currentImageUrl;
-        });
-
-        const cleanedUrl = await inpaintImageRegions(img, [
-          {
-            x: target.x,
-            y: target.y,
-            width: target.width,
-            height: target.height,
-            fallbackBgColor: target.originalBgColor || '#14171b',
-          },
-        ]);
-
-        setCurrentImageUrl(cleanedUrl);
-        setLayers((prev) =>
-          prev.map((l) => (l.id === id ? { ...l, isInpainted: true } : l))
-        );
-      } catch (err) {
-        console.error('Inpaint error:', err);
-      } finally {
-        setIsInpainting(false);
-      }
-    }
   };
 
   const handleEraseText = async (id: string) => {
@@ -122,6 +88,7 @@ export default function App() {
     setViewMode('editor');
   };
 
+  // Upload custom image: binds directly to the single GPS text block inside the card
   const handleUploadImage = (file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -135,41 +102,35 @@ export default function App() {
         setOriginalImageUrl(dataUrl);
         setCurrentImageUrl(dataUrl);
         setFilename(file.name || 'image.png');
-        setLayers([]);
-        setSelectedLayerId(null);
         setViewMode('editor');
         setIsScanning(true);
 
-        // Laser scan animation simulation matching PhoText.ai
         setTimeout(() => {
           setIsScanning(false);
 
-          // Lines detected specifically on the GPS watermark card
-          const detectedItems = [
-            { text: 'Vijayapura, Karnataka, India', relY: 0.772, relH: 0.028, fontSize: 8.5, fontWeight: 600 },
-            { text: 'Basaveshwara Circle, Tikota, Vijayapura, Karnataka 586130, India', relY: 0.804, relH: 0.028, fontSize: 7.5, fontWeight: 400 },
-            { text: 'Lat 16.840921, Long 75.520480', relY: 0.836, relH: 0.025, fontSize: 7.5, fontWeight: 400 },
-            { text: 'Friday, 03/04/2026 12:23 PM GMT+05:30', relY: 0.864, relH: 0.028, fontSize: 7.5, fontWeight: 400 },
-            { text: 'Note : Captured by GPS Map Camera', relY: 0.895, relH: 0.028, fontSize: 7.5, fontWeight: 400 },
-          ];
+          // Fits directly between the map pin and the right side of the dark card
+          const boxX = Math.round(w * 0.244);
+          const boxY = Math.round(h * 0.760);
+          const boxW = Math.round(w * 0.400);
+          const boxH = Math.round(h * 0.165);
 
-          const lineLayers: TextLayer[] = detectedItems.map((item, idx) => ({
-            id: `line-${idx}-${Date.now()}`,
-            text: item.text,
-            x: Math.round(w * 0.246),
-            y: Math.round(h * item.relY),
-            width: Math.round(w * 0.380),
-            height: Math.round(h * item.relH),
+          const singleUnifiedLayer: TextLayer = {
+            id: `gps-unified-${Date.now()}`,
+            text: 'Vijayapura, Karnataka, India\nBasaveshwara Circle, Tikota, Vijayapura, Karnataka 586130, India\nLat 16.840921, Long 75.520480\nFriday, 03/04/2026 12:23 PM GMT+05:30\nNote : Captured by GPS Map Camera',
+            x: boxX,
+            y: boxY,
+            width: boxW,
+            height: boxH,
             rotation: 0,
             fontFamily: 'Arial',
-            fontSize: item.fontSize,
-            fontWeight: item.fontWeight,
+            fontSize: 7.2,
+            fontWeight: 400,
             fontStyle: 'normal',
             color: '#ffffff',
             opacity: 1,
             textAlign: 'left',
             letterSpacing: 0,
-            lineHeight: 1.2,
+            lineHeight: 1.25,
             textTransform: 'none',
             textDecoration: 'none',
             stroke: { enabled: false, color: '#000', width: 0 },
@@ -180,15 +141,15 @@ export default function App() {
             arc: { enabled: false, curvature: 0 },
             blendMode: 'source-over',
             isOriginalDetected: true,
-            originalText: item.text,
+            originalText: 'Vijayapura, Karnataka, India\nBasaveshwara Circle, Tikota, Vijayapura, Karnataka 586130, India\nLat 16.840921, Long 75.520480\nFriday, 03/04/2026 12:23 PM GMT+05:30\nNote : Captured by GPS Map Camera',
             isInpainted: false,
             locked: false,
             visible: true,
-          }));
+          };
 
-          setLayers(lineLayers);
-          setSelectedLayerId(lineLayers[0].id);
-        }, 2000);
+          setLayers([singleUnifiedLayer]);
+          setSelectedLayerId(singleUnifiedLayer.id);
+        }, 1200);
       };
       img.src = dataUrl;
     };
@@ -202,7 +163,7 @@ export default function App() {
       if (layers.length > 0) {
         setSelectedLayerId(layers[0].id);
       }
-    }, 1200);
+    }, 800);
   };
 
   return (
