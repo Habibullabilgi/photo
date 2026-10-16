@@ -77,6 +77,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
   const [splitPos, setSplitPos] = useState<number>(50);
   const [isDraggingSplit, setIsDraggingSplit] = useState(false);
 
+  const [hoveredLayerId, setHoveredLayerId] = useState<string | null>(null);
   const [activeTool, setActiveTool] = useState<string>('text');
   const [fontCategory, setFontCategory] = useState<string>('Local Fonts');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -320,16 +321,21 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
             backgroundSize: '16px 16px',
           }}
         >
+          {/* Laser Scan Animation Overlay */}
           {isScanning && (
             <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/40 backdrop-blur-xs pointer-events-none">
               <div className="flex flex-col items-center gap-3 bg-white/95 px-6 py-4 rounded-2xl shadow-2xl">
                 <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
                 <span className="text-sm font-bold text-zinc-800">Scanning Image Text...</span>
               </div>
+              <div
+                className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_15px_#10b981] animate-bounce"
+                style={{ top: '45%' }}
+              />
             </div>
           )}
 
-          {/* Canvas container: completely clean image */}
+          {/* Canvas container */}
           <div
             className="relative transition-transform duration-75 origin-center shadow-xl rounded-sm bg-white overflow-hidden"
             style={{
@@ -360,45 +366,73 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
               </div>
             )}
 
-            {/* Render layer ONLY if explicitly selected/created */}
-            {layers.map((layer) => {
-              if (!layer.visible || layer.isRemoved) return null;
-              const isSelected = selectedLayerId === layer.id;
+            {/* Rendered Discrete Detected Lines */}
+            {!isScanning &&
+              layers.map((layer) => {
+                if (!layer.visible || layer.isRemoved) return null;
+                const isSelected = selectedLayerId === layer.id;
+                const isHovered = hoveredLayerId === layer.id;
 
-              return (
-                <div
-                  key={layer.id}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectLayer(layer.id);
-                  }}
-                  className={`absolute transition-all cursor-pointer ${
-                    isSelected ? 'border-2 border-dashed border-pink-500 z-30' : 'border-transparent'
-                  }`}
-                  style={{
-                    left: `${layer.x}px`,
-                    top: `${layer.y}px`,
-                    width: `${layer.width}px`,
-                    height: `${layer.height}px`,
-                  }}
-                >
+                return (
                   <div
-                    className="relative z-10 whitespace-nowrap overflow-hidden text-ellipsis leading-none select-none flex items-center h-full px-0.5"
+                    key={layer.id}
+                    onMouseEnter={() => setHoveredLayerId(layer.id)}
+                    onMouseLeave={() => setHoveredLayerId(null)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectLayer(layer.id);
+                    }}
+                    className={`absolute transition-all cursor-pointer ${
+                      isSelected
+                        ? 'border-2 border-dashed border-pink-500 z-30'
+                        : isHovered
+                        ? 'border-2 border-dashed border-emerald-400 bg-emerald-500/10 z-20'
+                        : 'border border-transparent z-10'
+                    }`}
                     style={{
-                      fontFamily: `"${layer.fontFamily}", Arial, sans-serif`,
-                      fontSize: `${layer.fontSize}px`,
-                      fontWeight: layer.fontWeight,
-                      color: layer.color || '#ffffff',
+                      left: `${layer.x}px`,
+                      top: `${layer.y}px`,
+                      width: `${layer.width}px`,
+                      height: `${layer.height}px`,
                     }}
                   >
-                    {layer.text}
+                    {/* Live text line - transparent background */}
+                    <div
+                      className="relative z-10 whitespace-nowrap overflow-hidden text-ellipsis leading-none select-none flex items-center h-full px-0.5"
+                      style={{
+                        fontFamily: `"${layer.fontFamily}", Arial, sans-serif`,
+                        fontSize: `${layer.fontSize}px`,
+                        fontWeight: layer.fontWeight,
+                        color: layer.color || '#ffffff',
+                        textShadow: layer.shadow?.enabled
+                          ? `${layer.shadow.offsetX}px ${layer.shadow.offsetY}px ${layer.shadow.blur}px ${layer.shadow.color}`
+                          : 'none',
+                      }}
+                    >
+                      {layer.text}
+                    </div>
+
+                    {/* Pink selection corners & resize handles */}
+                    {isSelected && (
+                      <>
+                        <div className="absolute -top-1.5 -left-1.5 w-3 h-3 rounded-full bg-pink-500 shadow border border-white pointer-events-none" />
+                        <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 rounded-full bg-pink-500 shadow border border-white pointer-events-none" />
+                        <div
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                          }}
+                          className="absolute -right-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-pink-500 font-extrabold text-xs cursor-ew-resize hover:scale-125 transition-transform select-none"
+                        >
+                          ↔
+                        </div>
+                      </>
+                    )}
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
 
-          {/* Bottom Left Compare */}
+          {/* Bottom Left: Compare */}
           <div className="absolute bottom-5 left-8 z-30">
             <button
               onClick={() => setCompareMode(!compareMode)}
@@ -413,7 +447,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
             </button>
           </div>
 
-          {/* Bottom Right Zoom */}
+          {/* Bottom Right: Zoom */}
           <div className="absolute bottom-5 right-8 z-30 flex items-center bg-white border border-zinc-200 rounded-lg shadow-md px-1 py-0.5 text-xs text-zinc-700">
             <button
               onClick={() => handleZoom(-0.1)}
@@ -570,7 +604,7 @@ export const StudioEditor: React.FC<StudioEditorProps> = ({
               <Type className="w-8 h-8 mb-2 opacity-40 text-pink-500" />
               <p className="text-xs font-semibold text-zinc-700">No Text Selected</p>
               <p className="text-[11px] text-zinc-400 mt-1">
-                Upload or select a photo to begin editing.
+                Hover or click on any text line in the photo to edit.
               </p>
             </div>
           )}
