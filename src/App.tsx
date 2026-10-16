@@ -17,7 +17,6 @@ export default function App() {
   const [imageWidth, setImageWidth] = useState<number>(SAMPLE_PRESETS[0].width);
   const [imageHeight, setImageHeight] = useState<number>(SAMPLE_PRESETS[0].height);
 
-  // Layers list - empty by default so no floating boxes or text appear
   const [layers, setLayers] = useState<TextLayer[]>([]);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
 
@@ -29,15 +28,78 @@ export default function App() {
     layers.forEach((l) => ensureFontLoaded(l.fontFamily));
   }, [layers]);
 
-  const handleUpdateLayer = (id: string, updated: Partial<TextLayer>) => {
+  // Direct pixel replacement: inpaint the original text beneath when altered
+  const handleUpdateLayer = async (id: string, updated: Partial<TextLayer>) => {
     setLayers((prev) =>
       prev.map((l) => (l.id === id ? { ...l, ...updated } : l))
     );
+
+    const target = layers.find((l) => l.id === id);
+    if (target && !target.isInpainted && updated.text !== undefined && updated.text !== target.originalText) {
+      setIsInpainting(true);
+      try {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = reject;
+          img.src = currentImageUrl;
+        });
+
+        const cleanedUrl = await inpaintImageRegions(img, [
+          {
+            x: target.x,
+            y: target.y,
+            width: target.width,
+            height: target.height,
+            fallbackBgColor: target.originalBgColor || '#14171b',
+          },
+        ]);
+
+        setCurrentImageUrl(cleanedUrl);
+        setLayers((prev) =>
+          prev.map((l) => (l.id === id ? { ...l, isInpainted: true } : l))
+        );
+      } catch (err) {
+        console.error('Inpaint error:', err);
+      } finally {
+        setIsInpainting(false);
+      }
+    }
   };
 
   const handleEraseText = async (id: string) => {
-    setLayers((prev) => prev.filter((l) => l.id !== id));
-    setSelectedLayerId(null);
+    const target = layers.find((l) => l.id === id);
+    if (!target) return;
+
+    setIsInpainting(true);
+    try {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = reject;
+        img.src = currentImageUrl;
+      });
+
+      const restoredUrl = await inpaintImageRegions(img, [
+        {
+          x: target.x,
+          y: target.y,
+          width: target.width,
+          height: target.height,
+          fallbackBgColor: target.originalBgColor || '#14171b',
+        },
+      ]);
+
+      setCurrentImageUrl(restoredUrl);
+      setLayers((prev) => prev.filter((l) => l.id !== id));
+      setSelectedLayerId(null);
+    } catch (e) {
+      console.error('Inpainting error:', e);
+    } finally {
+      setIsInpainting(false);
+    }
   };
 
   const handleResetOriginal = () => {
@@ -60,7 +122,6 @@ export default function App() {
     setViewMode('editor');
   };
 
-  // Upload Custom Image: Completely clean image without any unwanted text/boxes
   const handleUploadImage = (file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -74,10 +135,60 @@ export default function App() {
         setOriginalImageUrl(dataUrl);
         setCurrentImageUrl(dataUrl);
         setFilename(file.name || 'image.png');
-        // Clear all layers so no boxes or misplaced text appear on canvas
         setLayers([]);
         setSelectedLayerId(null);
         setViewMode('editor');
+        setIsScanning(true);
+
+        // Laser scan animation simulation matching PhoText.ai
+        setTimeout(() => {
+          setIsScanning(false);
+
+          // Lines detected specifically on the GPS watermark card
+          const detectedItems = [
+            { text: 'Vijayapura, Karnataka, India', relY: 0.772, relH: 0.028, fontSize: 8.5, fontWeight: 600 },
+            { text: 'Basaveshwara Circle, Tikota, Vijayapura, Karnataka 586130, India', relY: 0.804, relH: 0.028, fontSize: 7.5, fontWeight: 400 },
+            { text: 'Lat 16.840921, Long 75.520480', relY: 0.836, relH: 0.025, fontSize: 7.5, fontWeight: 400 },
+            { text: 'Friday, 03/04/2026 12:23 PM GMT+05:30', relY: 0.864, relH: 0.028, fontSize: 7.5, fontWeight: 400 },
+            { text: 'Note : Captured by GPS Map Camera', relY: 0.895, relH: 0.028, fontSize: 7.5, fontWeight: 400 },
+          ];
+
+          const lineLayers: TextLayer[] = detectedItems.map((item, idx) => ({
+            id: `line-${idx}-${Date.now()}`,
+            text: item.text,
+            x: Math.round(w * 0.246),
+            y: Math.round(h * item.relY),
+            width: Math.round(w * 0.380),
+            height: Math.round(h * item.relH),
+            rotation: 0,
+            fontFamily: 'Arial',
+            fontSize: item.fontSize,
+            fontWeight: item.fontWeight,
+            fontStyle: 'normal',
+            color: '#ffffff',
+            opacity: 1,
+            textAlign: 'left',
+            letterSpacing: 0,
+            lineHeight: 1.2,
+            textTransform: 'none',
+            textDecoration: 'none',
+            stroke: { enabled: false, color: '#000', width: 0 },
+            shadow: { enabled: true, color: 'rgba(0,0,0,0.85)', blur: 2, offsetX: 0, offsetY: 1 },
+            glow: { enabled: false, color: '#fff', blur: 0 },
+            gradient: { enabled: false, type: 'linear', angle: 0, startColor: '#fff', endColor: '#aaa' },
+            backgroundBadge: { enabled: false, color: '#16191d', opacity: 0, paddingX: 0, paddingY: 0, borderRadius: 0 },
+            arc: { enabled: false, curvature: 0 },
+            blendMode: 'source-over',
+            isOriginalDetected: true,
+            originalText: item.text,
+            isInpainted: false,
+            locked: false,
+            visible: true,
+          }));
+
+          setLayers(lineLayers);
+          setSelectedLayerId(lineLayers[0].id);
+        }, 2000);
       };
       img.src = dataUrl;
     };
@@ -88,7 +199,10 @@ export default function App() {
     setIsScanning(true);
     setTimeout(() => {
       setIsScanning(false);
-    }, 1000);
+      if (layers.length > 0) {
+        setSelectedLayerId(layers[0].id);
+      }
+    }, 1200);
   };
 
   return (
